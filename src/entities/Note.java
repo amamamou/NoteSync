@@ -8,17 +8,21 @@ public class Note {
     private String content;
     private Timestamp timestamp;
     private int categoryId; // New field for category ID
+    private int userId; // Field for user ID
+
 
     public Note() {
         this.timestamp = new Timestamp(System.currentTimeMillis());
     }
 
-    public Note(int id, String title, String content, Timestamp timestamp, int categoryId) {
+
+    public Note(int id, String title, String content, Timestamp timestamp, int categoryId, int userId) {
         this.id = id;
         this.title = title;
         this.content = content;
         this.timestamp = timestamp;
         this.categoryId = categoryId;
+        this.userId = userId;
     }
 
     // Getters and setters
@@ -60,5 +64,12 @@ public class Note {
 
     public void setCategoryId(int categoryId) {
         this.categoryId = categoryId;
+    }
+    public int getUserId() {
+        return userId;
+    }
+
+    public void setUserId(int userId) {
+        this.userId = userId;
     }
 }

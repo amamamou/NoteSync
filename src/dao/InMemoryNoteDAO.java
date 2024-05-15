@@ -1,16 +1,18 @@
 package dao;
 
-import entities.Note;
 
+import entities.Note;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class InMemoryNoteDAO implements NoteDAO {
     private java.sql.Connection connection;
+    private List<Note> notes; // Initialize the notes variable
 
     public InMemoryNoteDAO() {
-        connection = Connection.getInstance().getConnection(); // Reference dao.Connection
+        connection = dao.Connection.getInstance().getConnection(); // Fully qualify Connection class
+        notes = getAllNotes(); // Initialize the notes list when the DAO is created
     }
 
     @Override
@@ -25,16 +27,18 @@ public class InMemoryNoteDAO implements NoteDAO {
                         resultSet.getString("title"),
                         resultSet.getString("content"),
                         resultSet.getTimestamp("timestamp"),
-                        resultSet.getInt("category_id") // Get category ID from database
+                        resultSet.getInt("category_id"), // Updated to get category ID
+                        resultSet.getInt("user_id") // Get user ID
                 );
                 notes.add(note);
             }
+            resultSet.close();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return notes;
     }
-
     @Override
     public Note getNoteById(int id) {
         Note note = null;
@@ -48,7 +52,8 @@ public class InMemoryNoteDAO implements NoteDAO {
                         resultSet.getString("title"),
                         resultSet.getString("content"),
                         resultSet.getTimestamp("timestamp"),
-                        resultSet.getInt("category_id") // Get category ID from database
+                        resultSet.getInt("category_id"), // Updated to get category ID
+                        resultSet.getInt("user_id") // Get user ID
                 );
             }
         } catch (SQLException e) {
@@ -57,34 +62,33 @@ public class InMemoryNoteDAO implements NoteDAO {
         return note;
     }
 
-
-
     @Override
     public void addNote(Note note) {
         try {
-            PreparedStatement statement = connection.prepareStatement("INSERT INTO notes (title, content, timestamp, category_id) VALUES (?, ?, ?, ?)");
+            PreparedStatement statement = connection.prepareStatement("INSERT INTO notes (title, content, timestamp, category_id, user_id) VALUES (?, ?, ?, ?, ?)");
             statement.setString(1, note.getTitle());
             statement.setString(2, note.getContent());
             statement.setTimestamp(3, new Timestamp(note.getTimestamp().getTime()));
-            statement.setInt(4, note.getCategoryId()); // Add category ID to the statement
+            statement.setInt(4, note.getCategoryId());
+            statement.setInt(5, note.getUserId());
             statement.executeUpdate();
-            statement.close(); // Close the statement after execution
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
-
     @Override
     public void updateNote(Note note) {
         try {
-            PreparedStatement statement = connection.prepareStatement("UPDATE notes SET title = ?, content = ?, timestamp = ? WHERE id = ?");
+            PreparedStatement statement = connection.prepareStatement("UPDATE notes SET title = ?, content = ?, timestamp = ?, category_id = ? WHERE id = ?");
             statement.setString(1, note.getTitle());
             statement.setString(2, note.getContent());
             statement.setTimestamp(3, new Timestamp(note.getTimestamp().getTime()));
-            statement.setInt(4, note.getId());
+            statement.setInt(4, note.getCategoryId());
+            statement.setInt(5, note.getId());
             statement.executeUpdate();
-            statement.close(); // Close the statement after execution
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -96,11 +100,12 @@ public class InMemoryNoteDAO implements NoteDAO {
             PreparedStatement statement = connection.prepareStatement("DELETE FROM notes WHERE id = ?");
             statement.setInt(1, note.getId());
             statement.executeUpdate();
-            statement.close(); // Close the statement after execution
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
+
     @Override
     public List<Note> getAllNotesByCategory(int categoryId) {
         List<Note> categoryNotes = new ArrayList<>();
@@ -114,7 +119,8 @@ public class InMemoryNoteDAO implements NoteDAO {
                         resultSet.getString("title"),
                         resultSet.getString("content"),
                         resultSet.getTimestamp("timestamp"),
-                        categoryId // Use the provided categoryId instead of fetching from the database
+                        categoryId,
+                        resultSet.getInt("user_id") // Get user ID
                 );
                 categoryNotes.add(note);
             }
@@ -123,4 +129,14 @@ public class InMemoryNoteDAO implements NoteDAO {
         }
         return categoryNotes;
     }
+    public List<Note> getAllNotesByCategoryAndUser(int categoryId, int userId) {
+        List<Note> categoryNotes = new ArrayList<>();
+        for (Note note : notes) {
+            if (note.getCategoryId() == categoryId && note.getUserId() == userId) {
+                categoryNotes.add(note);
+            }
+        }
+        return categoryNotes;
+    }
+
 }

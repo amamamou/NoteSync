@@ -24,9 +24,10 @@ public class Main {
     private static Note selectedNote;
     private static JTextArea notesTextAreaInner;
     private static JTextField titleField;
+    private static int loggedInUserId; // New variable to store the logged-in user ID
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(Main::createAndShowGUI);
+        SwingUtilities.invokeLater(Main::showLoginDialog); // Start by showing the login dialog
     }
 
     private static void createAndShowGUI() {
@@ -121,7 +122,7 @@ public class Main {
             public void actionPerformed(ActionEvent e) {
                 String content = notesTextAreaInner.getText();
                 String title = extractTitleFromContent(content);
-                Note newNote = new Note(0, title, content, new Timestamp(System.currentTimeMillis()), currentCategoryId);
+                Note newNote = new Note(0, title, content, new Timestamp(System.currentTimeMillis()), currentCategoryId, loggedInUserId);
 
                 SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
                     @Override
@@ -133,7 +134,7 @@ public class Main {
 
                     @Override
                     protected void done() {
-                        showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner);
+                        showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner, loggedInUserId);
                     }
                 };
 
@@ -147,10 +148,14 @@ public class Main {
             public void actionPerformed(ActionEvent e) {
                 String content = notesTextAreaInner.getText();
                 if (selectedNote != null) {
+                    String newTitle = extractTitleFromContent(content);
                     selectedNote.setContent(content);
+                    selectedNote.setTitle(newTitle); // Update the title first
+                    
                     InMemoryNoteDAO noteDAO = new InMemoryNoteDAO();
-                    noteDAO.updateNote(selectedNote);
-                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner);
+                    noteDAO.updateNote(selectedNote); // Update the note in the database
+                    
+                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner, loggedInUserId);
                 }
             }
         });
@@ -162,7 +167,7 @@ public class Main {
                 if (selectedNote != null) {
                     InMemoryNoteDAO noteDAO = new InMemoryNoteDAO();
                     noteDAO.deleteNote(selectedNote);
-                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner);
+                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner, loggedInUserId);
                 }
             }
         });
@@ -241,19 +246,19 @@ public class Main {
             public void mouseClicked(MouseEvent e) {
                 currentCategoryId = category.getId();
                 currentCategoryName = category.getName();
-                showCategoryNotes(currentCategoryId, currentCategoryName, null);
+                showCategoryNotes(currentCategoryId, currentCategoryName, null, loggedInUserId);
             }
         });
 
         return panel;
     }
 
-    private static void showCategoryNotes(int categoryId, String categoryName, JTextArea notesTextArea) {
+    private static void showCategoryNotes(int categoryId, String categoryName, JTextArea notesTextArea, int userId) {
         currentCategoryId = categoryId;
         currentCategoryName = categoryName;
 
         InMemoryNoteDAO noteDAO = new InMemoryNoteDAO();
-        List<Note> notes = noteDAO.getAllNotesByCategory(categoryId);
+        List<Note> notes = noteDAO.getAllNotesByCategoryAndUser(categoryId, userId);
 
         JPanel notesArrayPanel = new JPanel();
         notesArrayPanel.setLayout(new BoxLayout(notesArrayPanel, BoxLayout.Y_AXIS));
@@ -311,7 +316,7 @@ public class Main {
             public void actionPerformed(ActionEvent e) {
                 String content = notesTextAreaInner.getText();
                 String title = extractTitleFromContent(content);
-                Note newNote = new Note(0, title, content, new Timestamp(System.currentTimeMillis()), categoryId);
+                Note newNote = new Note(0, title, content, new Timestamp(System.currentTimeMillis()), categoryId, loggedInUserId);
 
                 SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
                     @Override
@@ -323,7 +328,7 @@ public class Main {
 
                     @Override
                     protected void done() {
-                        showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner);
+                        showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner, userId);
                     }
                 };
 
@@ -344,7 +349,7 @@ public class Main {
                     InMemoryNoteDAO noteDAO = new InMemoryNoteDAO();
                     noteDAO.updateNote(selectedNote); // Update the note in the database
                     
-                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner);
+                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner, userId);
                 }
             }
         });
@@ -357,7 +362,7 @@ public class Main {
                 if (selectedNote != null) {
                     InMemoryNoteDAO noteDAO = new InMemoryNoteDAO();
                     noteDAO.deleteNote(selectedNote);
-                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner);
+                    showCategoryNotes(currentCategoryId, currentCategoryName, notesTextAreaInner, userId);
                 }
             }
         });
@@ -396,6 +401,80 @@ public class Main {
         String title = (index != -1) ? content.substring(0, index).trim() : content.trim();
         
         return title;
+    }
+
+    private static int login(String username, String password) {
+        int userId = -1; // Default value indicating login failure
+
+        try {
+            // Establish a connection to the database
+            Connection connection = DriverManager.getConnection("jdbc:mysql://localhost/NoteTakingApp", "root", "");
+
+            // Prepare the SQL statement to select the user ID based on the provided username and password
+            String query = "SELECT id FROM users WHERE username = ? AND password = ?";
+            PreparedStatement statement = connection.prepareStatement(query);
+            statement.setString(1, username);
+            statement.setString(2, password);
+
+            // Execute the query
+            ResultSet resultSet = statement.executeQuery();
+
+            // If a matching user is found, retrieve the user ID
+            if (resultSet.next()) {
+                userId = resultSet.getInt("id");
+            }
+
+            // Close the resources
+            resultSet.close();
+            statement.close();
+            connection.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return userId;
+    }
+
+    private static void showLoginDialog() {
+        JTextField usernameField = new JTextField(10);
+        JPasswordField passwordField = new JPasswordField(10);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 40, 20, 40)); // Add some padding
+        JPanel fieldsPanel = new JPanel(new GridLayout(0, 1));
+        fieldsPanel.add(new JLabel("Username:"));
+        fieldsPanel.add(usernameField);
+        fieldsPanel.add(new JLabel("Password:"));
+        fieldsPanel.add(passwordField);
+        panel.add(fieldsPanel, BorderLayout.CENTER);
+
+        // Load the image
+        ImageIcon icon = new ImageIcon("C:\\Users\\DELL\\eclipse-workspace\\NoteTakinApp\\src\\login.png");
+        // Resize the image
+        Image image = icon.getImage().getScaledInstance(320, 320, Image.SCALE_SMOOTH);
+        icon = new ImageIcon(image);
+        // Create a label for the image
+        JLabel imageLabel = new JLabel(icon);
+        // Align the image label to the center horizontally
+        imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(imageLabel, BorderLayout.NORTH); // Add the image label to the top of the panel
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Login", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION) {
+            String username = usernameField.getText();
+            String password = new String(passwordField.getPassword());
+            loggedInUserId = login(username, password);
+            if (loggedInUserId != -1) {
+                // Login successful, show home page
+                createAndShowGUI();
+            } else {
+                // Login failed, show error message
+                JOptionPane.showMessageDialog(null, "Invalid username or password. Please try again.", "Login Failed", JOptionPane.ERROR_MESSAGE);
+                showLoginDialog();
+            }
+        } else {
+            System.exit(0); // User canceled login
+        }
     }
 
 
